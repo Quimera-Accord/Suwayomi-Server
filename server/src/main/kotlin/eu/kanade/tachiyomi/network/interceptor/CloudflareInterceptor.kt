@@ -117,7 +117,7 @@ class CloudflareInterceptor(
     companion object {
         private val ERROR_CODES = listOf(403, 503)
         private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
-        private val COOKIE_NAMES = listOf("cf_clearance")
+        val COOKIE_NAMES = listOf("cf_clearance")
         private val CHROME_IMAGE_TEMPLATE_REGEX = Regex("""<title>(.*?) \(\d+×\d+\)</title>""")
         private val CHALLENGE_MARKERS = listOf("_vShield_v=", "balooPow", "ddosmitigation")
     }
@@ -221,9 +221,14 @@ object CFClearance {
                                             session = serverConfig.flareSolverrSessionName.value,
                                             sessionTtlMinutes = serverConfig.flareSolverrSessionTtl.value,
                                             cookies =
-                                                network.cookieStore.get(originalRequest.url).map {
-                                                    FlareSolverCookie(it.name, it.value)
-                                                },
+                                                network.cookieStore.get(originalRequest.url)
+                                                    .groupBy { it.name }
+                                                    .filter { it.key !in CloudflareInterceptor.COOKIE_NAMES }
+                                                    .values
+                                                    .map { cookies ->
+                                                        val cookie = cookies.maxBy { it.expiresAt }
+                                                        FlareSolverCookie(cookie.name, cookie.value)
+                                                    },
                                             returnOnlyCookies = onlyCookies,
                                             maxTimeout = timeout.inWholeMilliseconds.toInt(),
                                             postData =
@@ -295,9 +300,13 @@ object CFClearance {
                     }
             logger.trace { "New cookies\n${cookies.joinToString("; ")}" }
             val finalCookies =
-                network.cookieStore.get(originalRequest.url).joinToString("; ", postfix = "; ") {
-                    "${it.name}=${it.value}"
-                }
+                network.cookieStore.get(originalRequest.url)
+                    .groupBy { it.name }
+                    .values
+                    .map { cookies -> cookies.maxBy { it.expiresAt } }
+                    .joinToString("; ", postfix = "; ") {
+                        "${it.name}=${it.value}"
+                    }
             logger.trace { "Final cookies\n$finalCookies" }
             return originalRequest
                 .newBuilder()
