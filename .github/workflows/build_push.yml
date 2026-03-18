@@ -173,6 +173,8 @@ jobs:
   release:
     needs: bundle
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -207,43 +209,16 @@ jobs:
           name: windows-x64
           path: release
 
-      - name: Checkout Preview branch
-        uses: actions/checkout@v6
-        with:
-          repository: "Suwayomi/Suwayomi-Server-preview"
-          ref: main
-          path: preview
-          token: ${{ secrets.DEPLOY_PREVIEW_TOKEN }}
-
       - name: Generate Tag Name
         id: GenTagName
         run: |
           cd release
-          genTag=$(ls *.jar | sed -e's/Suwayomi-Server-\|.jar//g')
+          genTag=$(ls *.jar | sed -e 's/Suwayomi-Server-\|.jar//g')
           echo "$genTag"
           echo "value=$genTag" >> $GITHUB_OUTPUT
 
-      - name: Create Tag
-        run: |
-          TAG="${{ steps.GenTagName.outputs.value }}"
-          echo "tag: $TAG"
-          cd preview
-          echo "{ \"latest\": \"$TAG\" }" > index.json
-          git add index.json
-          git config --global user.email \
-            "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git commit -m "Updated to $TAG"
-          git push origin main
-
-          git tag $TAG
-          git push origin $TAG
-
-      - name: Upload Preview Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.DEPLOY_PREVIEW_TOKEN }}
-          repository: "Suwayomi/Suwayomi-Server-preview"
-          tag_name:  ${{ steps.GenTagName.outputs.value }}
+          tag_name: ${{ steps.GenTagName.outputs.value }}
           files: release/*
-
